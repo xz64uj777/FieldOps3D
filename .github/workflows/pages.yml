@@ -23,60 +23,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build improved game from upstream + patches
-        run: |
-          set -euo pipefail
-          mkdir -p site/src
-          cp styles.css site/
-          cp src/main.js src/constants.js site/src/
-
-          python3 <<'PY'
-          from pathlib import Path
-          import re, urllib.request
-
-          url = "https://raw.githubusercontent.com/xz64uj777/Chatdemo/main/index.html"
-          html = urllib.request.urlopen(url, timeout=60).read().decode("utf-8")
-          style_m = re.search(r"<style>([\\s\\S]*?)</style>", html)
-          body_m = re.search(r"<body>([\\s\\S]*?)<script type=\"module\">", html)
-          script_m = re.search(r"<script type=\"module\">([\\s\\S]*?)</script>\\s*</body>", html)
-          assert script_m, "module script missing upstream"
-          script = script_m.group(1)
-
-          # v0.9 patches
-          old = "renderer.setPixelRatio(Math.min(devicePixelRatio,1.8));"
-          new = "const MAX_PR=window.matchMedia('(pointer:coarse)').matches?1.5:1.8;renderer.setPixelRatio(Math.min(devicePixelRatio,MAX_PR));"
-          if old in script:
-              script = script.replace(old, new)
-
-          restart = "$('restart').onclick=()=>{if(!confirm('Restart construction from the beginning? This resets all contract objectives, vehicle positions and loads, money, fuel, and saved site progress on this device.'))return;try{localStorage.removeItem('fieldOps3dSave')}catch(e){}location.reload()};"
-          if "manualSave" not in script and restart in script:
-              script = script.replace(restart, restart + "\nconst _ms=$('manualSave');if(_ms)_ms.onclick=()=>saveGame(false);")
-
-          shadow = '''\n(function setupShadowQuality(){\n  const sel=$('shadowQuality');\n  if(!sel)return;\n  const apply=()=>{\n    const v=sel.value;\n    if(v==='off'){renderer.shadowMap.enabled=false;sun.castShadow=false;}\n    else if(v==='low'){renderer.shadowMap.enabled=true;sun.castShadow=true;sun.shadow.mapSize.set(512,512);}\n    else{renderer.shadowMap.enabled=true;sun.castShadow=true;sun.shadow.mapSize.set(1024,1024);}\n    renderer.shadowMap.needsUpdate=true;\n    try{localStorage.setItem('fieldOps3dShadow',v)}catch(e){}\n  };\n  try{const s=localStorage.getItem('fieldOps3dShadow');if(s)sel.value=s}catch(e){}\n  sel.addEventListener('change',apply);apply();\n})();\n'''
-          if 'setupShadowQuality' not in script:
-              if 'animate();' in script:
-                  script = script.replace('animate();', shadow + '\nanimate();', 1)
-              else:
-                  script += shadow
-
-          # strip accidental trailing script/html if present
-          if '</script>' in script:
-              script = script.split('</script>')[0].rstrip() + '\n'
-
-          hide = '''\n(function hideMenusOnStart(){\n  const run = () => {\n    ['machinePicker','optionsMenu','machineGuide'].forEach(id => {\n      const el = document.getElementById(id);\n      if (el) el.classList.remove('open');\n    });\n    document.body.classList.add('panels-hidden');\n    const hideButton = document.getElementById('panelHide');\n    if (hideButton) hideButton.textContent = '+ SHOW MENUS';\n  };\n  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run, { once: true });\n  else run();\n})();\n'''
-          if 'hideMenusOnStart' not in script:
-              script = script.rstrip() + '\n' + hide
-
-          Path('site/src/game.js').write_text(script, encoding='utf-8')
-          print('game.js bytes', len(script))
-          PY
-
-          cp index.html site/index.html
-          grep -q 'three@0.160.0' site/src/game.js
-          grep -q 'Field Ops 3D' site/index.html
-          grep -q 'manualSave' site/index.html
-          grep -q 'shadowQuality' site/index.html
-          wc -c site/src/game.js site/index.html site/styles.css
+      - name: Build site
+        run: python3 scripts/build_game.py
 
       - uses: actions/configure-pages@v5
         with:
