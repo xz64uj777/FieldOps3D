@@ -1,0 +1,53 @@
+name: Deploy Field Ops 3D
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate entry and modules
+        run: |
+          test -f index.html
+          test -f styles.css
+          test -f src/main.js
+          test -f src/game.js
+          test -f src/constants.js
+          grep -q 'Field Ops 3D' index.html
+          grep -q 'three@0.160.0' src/game.js
+          node --check src/constants.js
+          node --input-type=module -e "import('fs').then(fs=>fs.promises.readFile('src/main.js','utf8')).then(console.log('main ok'))"
+
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - name: Stage site
+        run: |
+          mkdir -p site/src
+          cp index.html styles.css site/
+          cp src/*.js site/src/
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - id: deployment
+        uses: actions/deploy-pages@v4
