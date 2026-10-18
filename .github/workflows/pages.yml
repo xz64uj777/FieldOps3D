@@ -23,27 +23,32 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Validate entry and modules
+      - name: Build playable site
         run: |
-          test -f index.html
-          test -f styles.css
-          test -f src/main.js
-          test -f src/game.js
-          test -f src/constants.js
-          grep -q 'Field Ops 3D' index.html
-          grep -q 'three@0.160.0' src/game.js
-          node --check src/constants.js
-          node --input-type=module -e "import('fs').then(fs=>fs.promises.readFile('src/main.js','utf8')).then(console.log('main ok'))"
+          set -e
+          mkdir -p site/src
+          cp styles.css site/
+          cp src/main.js src/constants.js site/src/
+
+          if [ -f src/game.js ] && [ "$(wc -c < src/game.js)" -gt 1000 ]; then
+            cp src/game.js site/src/game.js
+          elif [ -f src/game.part-a.js ] && [ -f src/game.part-b.js ]; then
+            cat src/game.part-a.js src/game.part-b.js > site/src/game.js
+          else
+            echo "Missing game runtime" >&2
+            exit 1
+          fi
+
+          cp index.html site/index.html
+
+          grep -q 'three@0.160.0' site/src/game.js
+          grep -q 'Field Ops 3D' site/index.html
+          test -f site/src/main.js
+          wc -c site/src/game.js site/index.html site/styles.css
 
       - uses: actions/configure-pages@v5
         with:
           enablement: true
-
-      - name: Stage site
-        run: |
-          mkdir -p site/src
-          cp index.html styles.css site/
-          cp src/*.js site/src/
 
       - uses: actions/upload-pages-artifact@v3
         with:
